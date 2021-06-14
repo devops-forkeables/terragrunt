@@ -46,7 +46,8 @@ func handleInclude(
 		if err != nil {
 			return nil, err
 		}
-		return mergeConfigWithIncludedConfig(config, includedConfig, terragruntOptions)
+		includedConfig.Merge(config, terragruntOptions)
+		return includedConfig, nil
 	case DeepMerge:
 		terragruntOptions.Logger.Debugf("Included config %s has strategy deep merge: merging config in (deep).", terragruntInclude.Include.Path)
 		terragruntOptions.Logger.Error("Deep merge is not implemented yet")
@@ -56,85 +57,84 @@ func handleInclude(
 	return nil, errors.WithStackTrace(fmt.Errorf("Impossible condition"))
 }
 
-// Merge the given config with an included config. Anything specified in the current config will override the contents
-// of the included config. If the included config is nil, just return the current config.
-func mergeConfigWithIncludedConfig(config *TerragruntConfig, includedConfig *TerragruntConfig, terragruntOptions *options.TerragruntOptions) (*TerragruntConfig, error) {
-	if config.RemoteState != nil {
-		includedConfig.RemoteState = config.RemoteState
+// Merge performs a shallow merge of the given sourceConfig into the targetConfig. sourceConfig will override common
+// attributes defined in the targetConfig. Note that this will modify the targetConfig.
+func (targetConfig *TerragruntConfig) Merge(sourceConfig *TerragruntConfig, terragruntOptions *options.TerragruntOptions) {
+	// Merge simple attributes first
+	if sourceConfig.DownloadDir != "" {
+		targetConfig.DownloadDir = sourceConfig.DownloadDir
 	}
 
-	if config.PreventDestroy != nil {
-		includedConfig.PreventDestroy = config.PreventDestroy
+	if sourceConfig.IamRole != "" {
+		targetConfig.IamRole = sourceConfig.IamRole
+	}
+
+	if sourceConfig.IamAssumeRoleDuration != nil {
+		targetConfig.IamAssumeRoleDuration = sourceConfig.IamAssumeRoleDuration
+	}
+
+	if sourceConfig.TerraformVersionConstraint != "" {
+		targetConfig.TerraformVersionConstraint = sourceConfig.TerraformVersionConstraint
+	}
+
+	if sourceConfig.TerraformBinary != "" {
+		targetConfig.TerraformBinary = sourceConfig.TerraformBinary
+	}
+
+	if sourceConfig.PreventDestroy != nil {
+		targetConfig.PreventDestroy = sourceConfig.PreventDestroy
+	}
+
+	if sourceConfig.RetryMaxAttempts != nil {
+		targetConfig.RetryMaxAttempts = sourceConfig.RetryMaxAttempts
+	}
+
+	if sourceConfig.RetrySleepIntervalSec != nil {
+		targetConfig.RetrySleepIntervalSec = sourceConfig.RetrySleepIntervalSec
+	}
+
+	if sourceConfig.TerragruntVersionConstraint != "" {
+		targetConfig.TerragruntVersionConstraint = sourceConfig.TerragruntVersionConstraint
 	}
 
 	// Skip has to be set specifically in each file that should be skipped
-	includedConfig.Skip = config.Skip
+	targetConfig.Skip = sourceConfig.Skip
 
-	if config.Terraform != nil {
-		if includedConfig.Terraform == nil {
-			includedConfig.Terraform = config.Terraform
+	if sourceConfig.RemoteState != nil {
+		targetConfig.RemoteState = sourceConfig.RemoteState
+	}
+
+	if sourceConfig.Terraform != nil {
+		if targetConfig.Terraform == nil {
+			targetConfig.Terraform = sourceConfig.Terraform
 		} else {
-			if config.Terraform.Source != nil {
-				includedConfig.Terraform.Source = config.Terraform.Source
+			if sourceConfig.Terraform.Source != nil {
+				targetConfig.Terraform.Source = sourceConfig.Terraform.Source
 			}
-			mergeExtraArgs(terragruntOptions, config.Terraform.ExtraArgs, &includedConfig.Terraform.ExtraArgs)
+			mergeExtraArgs(terragruntOptions, sourceConfig.Terraform.ExtraArgs, &targetConfig.Terraform.ExtraArgs)
 
-			mergeHooks(terragruntOptions, config.Terraform.BeforeHooks, &includedConfig.Terraform.BeforeHooks)
-			mergeHooks(terragruntOptions, config.Terraform.AfterHooks, &includedConfig.Terraform.AfterHooks)
+			mergeHooks(terragruntOptions, sourceConfig.Terraform.BeforeHooks, &targetConfig.Terraform.BeforeHooks)
+			mergeHooks(terragruntOptions, sourceConfig.Terraform.AfterHooks, &targetConfig.Terraform.AfterHooks)
 		}
 	}
 
-	if config.Dependencies != nil {
-		includedConfig.Dependencies = config.Dependencies
+	if sourceConfig.Dependencies != nil {
+		targetConfig.Dependencies = sourceConfig.Dependencies
 	}
 
-	if config.DownloadDir != "" {
-		includedConfig.DownloadDir = config.DownloadDir
-	}
-
-	if config.IamRole != "" {
-		includedConfig.IamRole = config.IamRole
-	}
-
-	if config.IamAssumeRoleDuration != nil {
-		includedConfig.IamAssumeRoleDuration = config.IamAssumeRoleDuration
-	}
-
-	if config.TerraformVersionConstraint != "" {
-		includedConfig.TerraformVersionConstraint = config.TerraformVersionConstraint
-	}
-
-	if config.TerraformBinary != "" {
-		includedConfig.TerraformBinary = config.TerraformBinary
-	}
-
-	if config.RetryableErrors != nil {
-		includedConfig.RetryableErrors = config.RetryableErrors
-	}
-
-	if config.RetryMaxAttempts != nil {
-		includedConfig.RetryMaxAttempts = config.RetryMaxAttempts
-	}
-
-	if config.RetrySleepIntervalSec != nil {
-		includedConfig.RetrySleepIntervalSec = config.RetrySleepIntervalSec
-	}
-
-	if config.TerragruntVersionConstraint != "" {
-		includedConfig.TerragruntVersionConstraint = config.TerragruntVersionConstraint
+	if sourceConfig.RetryableErrors != nil {
+		targetConfig.RetryableErrors = sourceConfig.RetryableErrors
 	}
 
 	// Merge the generate configs. This is a shallow merge. Meaning, if the child has the same name generate block, then the
 	// child's generate block will override the parent's block.
-	for key, val := range config.GenerateConfigs {
-		includedConfig.GenerateConfigs[key] = val
+	for key, val := range sourceConfig.GenerateConfigs {
+		targetConfig.GenerateConfigs[key] = val
 	}
 
-	if config.Inputs != nil {
-		includedConfig.Inputs = mergeInputs(config.Inputs, includedConfig.Inputs)
+	if sourceConfig.Inputs != nil {
+		targetConfig.Inputs = mergeInputs(sourceConfig.Inputs, targetConfig.Inputs)
 	}
-
-	return includedConfig, nil
 }
 
 // Merge the extra arguments.

@@ -791,10 +791,8 @@ func TestMergeConfigIntoIncludedConfig(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, err := mergeConfigWithIncludedConfig(testCase.config, testCase.includedConfig, mockOptionsForTest(t))
-		if assert.Nil(t, err, "Unexpected error for config %v and includeConfig %v: %v", testCase.config, testCase.includedConfig, err) {
-			assert.Equal(t, testCase.expected, actual, "For config %v and includeConfig %v", testCase.config, testCase.includedConfig)
-		}
+		testCase.includedConfig.Merge(testCase.config, mockOptionsForTest(t))
+		assert.Equal(t, testCase.expected, testCase.includedConfig)
 	}
 }
 
